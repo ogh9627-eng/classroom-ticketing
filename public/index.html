@@ -8,8 +8,11 @@
     <style>
         * { box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; flex-direction: column; align-items: center; background: #f1f5f9; margin: 0; padding: 20px; }
-        .user-info-bar { background: white; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; display: flex; gap: 10px; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-        input[type="text"], input[type="number"] { padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 14px; }
+        .admin-bar { width: 100%; max-width: 360px; display: flex; justify-content: flex-end; margin-bottom: 10px; }
+        .btn-reset { background-color: #ef4444; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 13px; }
+        .btn-reset:hover { background-color: #dc2626; }
+        .user-info-bar { background: white; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; display: flex; gap: 10px; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); width: 100%; max-width: 360px; }
+        input[type="text"], input[type="number"] { padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 14px; width: 50%; }
         .chalkboard { width: 100%; max-width: 360px; height: 40px; background: #1e3a2b; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; border-radius: 6px; margin-bottom: 20px; }
         .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; max-width: 360px; width: 100%; }
         .seat { height: 65px; background: white; border: 2px solid #94a3b8; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: bold; cursor: pointer; font-size: 14px; }
@@ -24,6 +27,11 @@
     </style>
 </head>
 <body>
+
+    <!-- 선생님 전용 초기화 버튼 -->
+    <div class="admin-bar">
+        <button class="btn-reset" onclick="resetAllSeats()">선생님 전용 좌석 초기화</button>
+    </div>
 
     <h2>실시간 학급 자리 티케팅</h2>
     
@@ -58,6 +66,11 @@
         
         // 타인이 자리를 선점했을 때 실시간 단일 좌석 업데이트
         socket.on('seatUpdated', ({ seatIndex, seatInfo }) => { updateSingleSeat(seatIndex, seatInfo); });
+
+        // 초기화 처리 결과 수신
+        socket.on('resetResult', (res) => {
+            alert(res.message);
+        });
 
         // 좌석 전체 목록 출력
         function renderSeats(seats) {
@@ -136,6 +149,14 @@
         socket.on('bookingResult', (res) => {
             alert(res.message);
         });
+
+        // 선생님 전용 좌석 초기화 함수
+        function resetAllSeats() {
+            const pwd = prompt("선생님 비밀번호를 입력하세요:");
+            if (pwd) {
+                socket.emit('resetSeats', { adminPassword: pwd });
+            }
+        }
     </script>
 </body>
 </html>

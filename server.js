@@ -68,6 +68,17 @@ io.on('connection', (socket) => {
         // 접속한 전체 사용자 화면의 좌석 실시간 갱신 브로드캐스트
         io.emit('seatUpdated', { seatIndex, seatInfo: seats[seatIndex] });
     });
+      // [선생님 전용] 좌석 전체 초기화 처리
+    socket.on('resetSeats', (data) => {
+        // 비밀번호 검수 (기본 비밀번호: 1234)
+        if (data.adminPassword === "1234") {
+            seats = new Array(TOTAL_SEATS).fill(null);
+            io.emit('initSeats', seats); // 접속한 모든 학생 화면을 빈자리로 즉시 동기화
+            socket.emit('resetResult', { success: true, message: '모든 좌석이 초기화되었습니다.' });
+        } else {
+            socket.emit('resetResult', { success: false, message: '비밀번호가 일치하지 않습니다.' });
+        }
+    });
 
     socket.on('disconnect', () => {
         console.log(`접속 종료: ${socket.id}`);
