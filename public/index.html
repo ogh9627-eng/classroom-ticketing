@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>실시간 학급 좌석 티케팅</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; flex-direction: column; align-items: center; background: #f1f5f9; margin: 0; padding: 20px; }
+        .user-info-bar { background: white; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; display: flex; gap: 10px; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        input[type="text"], input[type="number"] { padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 14px; }
+        .chalkboard { width: 100%; max-width: 360px; height: 40px; background: #1e3a2b; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; border-radius: 6px; margin-bottom: 20px; }
+        .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; max-width: 360px; width: 100%; }
+        .seat { height: 65px; background: white; border: 2px solid #94a3b8; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: bold; cursor: pointer; font-size: 14px; }
+        .seat.taken { background: #ef4444; border-color: #dc2626; color: white; cursor: not-allowed; }
+        .seat.taken .seat-user { font-size: 11px; font-weight: normal; margin-top: 2px; }
+        .modal-bg { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); justify-content:center; align-items:center; }
+        .modal { background: white; padding: 20px; border-radius: 12px; width: 280px; text-align: center; }
+        .captcha { background: #0f172a; color: #38bdf8; font-size: 24px; font-weight: bold; letter-spacing: 4px; padding: 10px; margin: 10px 0; border-radius: 6px; }
+        .btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .btn-confirm { background: #22c55e; color: white; }
+        .btn-cancel { background: #64748b; color: white; }
+    </style>
+</head>
+<body>
+
+    <h2>실시간 학급 자리 티케팅</h2>
+    
+    <div class="user-info-bar">
+        <input type="number" id="studentId" placeholder="학번 (예: 10101)">
+        <input type="text" id="studentName" placeholder="이름 (예: 홍길동)">
+    </div>
+
+    <div class="chalkboard">칠 판</div>
+    <div class="grid" id="seatGrid"></div>
+
+    <!-- 보안문자 입력 모달 -->
+    <div class="modal-bg" id="modal">
+        <div class="modal">
+            <h3 id="modalTitle">보안문자 입력</h3>
+            <div class="captcha" id="captchaText">ABCD</div>
+            <input type="text" id="captchaInput" placeholder="보안문자 입력" maxlength="4" style="width: 100%; text-align: center; margin-bottom: 10px;">
+            <div>
+                <button class="btn btn-confirm" onclick="submitBooking()">확인 (선점)</button>
+                <button class="btn btn-cancel" onclick="closeModal()">취소</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let selectedSeatIndex = null;
+        let currentCaptcha = "";
+
+        // 서버 접속 및 전체 상태 받기
+        socket.on('initSeats', (seats) => { renderSeats(seats); });
+        
+        // 타인이 자리를 선점했을 때 실시간 단일 좌석 업데이트
+        socket.on('seatUpdated', ({ seatIndex, seatInfo }) => { updateSingleSeat(seatIndex, seatInfo); });
+
+        // 좌석 전체 목록 출력
+        function renderSeats(seats) {
+            const grid = document.getElementById('seatGrid');
+            grid.innerHTML = '';
+            seats.forEach((seat, idx) => {
+                const el = document.createElement('div');
+                el.id = `seat-${idx}`;
+                el.className = `seat ${seat ? 'taken' : ''}`;
+                el.innerHTML = seat ? `<div>${idx + 1}</div><div class="seat-user">${seat.studentName}</div>` : `${idx + 1}`;
+                el.onclick = () => onSeatClick(idx, seat);
+                grid.appendChild(el);
+            });
+        }
+
+        function updateSingleSeat(idx, seatInfo) {
+            const el = document.getElementById(`seat-${idx}`);
+            if (el && seatInfo) {
+                el.className = 'seat taken';
+                el.innerHTML = `<div>${idx + 1}</div><div class="seat-user">${seatInfo.studentName}</div>`;
+            }
+        }
+
+        function onSeatClick(index, seatInfo) {
+            if (seatInfo || document.getElementById(`seat-${index}`).classList.contains('taken')) {
+                alert("이미 선점된 좌석입니다.");
+                return;
+            }
+            const sId = document.getElementById('studentId').value.trim();
+            const sName = document.getElementById('studentName').value.trim();
+            if (!sId || !sName) {
+                alert("학번과 이름을 먼저 입력해 주세요.");
+                return;
+            }
+
+            selectedSeatIndex = index;
+            openModal();
+        }
+
+        function openModal() {
+            const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+            currentCaptcha = Array.from({length: 4}, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+            document.getElementById('captchaText').innerText = currentCaptcha;
+            document.getElementById('captchaInput').value = '';
+            document.getElementById('modalTitle').innerText = `${selectedSeatIndex + 1}번 좌석 보안문자`;
+            document.getElementById('modal').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('modal').style.display = 'none';
+            selectedSeatIndex = null;
+        }
+
+        function submitBooking() {
+            const inputVal = document.getElementById('captchaInput').value.trim().toUpperCase();
+            if (inputVal !== currentCaptcha) {
+                alert("보안문자가 불일치합니다.");
+                openModal();
+                return;
+            }
+
+            const studentId = document.getElementById('studentId').value.trim();
+            const studentName = document.getElementById('studentName').value.trim();
+
+            // 백엔드로 선점 요청
+            socket.emit('requestSeat', {
+                seatIndex: selectedSeatIndex,
+                studentId,
+                studentName
+            });
+
+            closeModal();
+        }
+
+        // 선점 처리 결과 수신
+        socket.on('bookingResult', (res) => {
+            alert(res.message);
+        });
+    </script>
+</body>
+</html>
